@@ -1,0 +1,9 @@
+fastapi==0.100.0
+uvicorn==0.23.2
+sqlalchemy==2.0.20
+pydantic==2.10.9
+chromadb==0.4.0
+langchain==0.1.0
+langchain_anthropic==0.1.0
+sentence_transformers==2.2.2
+pypdf2==3.0.1
