@@ -1,0 +1,19 @@
+code,product_id,title,severity,cause,fix_summary,kb_id,escalate
+VS-1042,velosync,Path too long,low,File path exceeds 260 characters on Windows,Shorten the path or enable long path support,KB-1002,false
+VS-1107,velosync,Storage quota exceeded,medium,Plan storage is full,Empty the web trash or add storage,KB-1002,false
+VS-1203,velosync,File locked,low,Another application has the file open,Close the application; sync resumes within 60 seconds,KB-1002,false
+VS-1310,velosync,Session expired,low,Sign-in session ended,Select Sign in again,KB-1002,false
+VS-1618,velosync,Unsupported characters,low,File name has characters not allowed by the platform,Rename the file,KB-1002,false
+VG-619,veloguard,Tunnel could not be established,medium,Firewall blocks UDP 51820,Switch the protocol to TLS 443,KB-2001,false
+VG-691,veloguard,Credentials rejected,medium,Password or MFA code rejected,Sign out and sign in again,KB-2001,false
+VG-809,veloguard,NAT or firewall interference,medium,Strict NAT or SIP ALG on the router,Restart the router or switch to TLS 443,KB-2001,false
+VG-1003,veloguard,Device certificate expired,medium,Certificate is older than 12 months,Select Renew certificate; managed devices need IT,KB-2001,false
+VG-2100,veloguard,Split DNS not applied,medium,Another VPN or DNS filter is interfering,Remove the other client and reconnect,KB-2002,false
+ID-401,veloria-id,Invalid credentials,low,Wrong email or password,Check details or reset password,KB-4002,false
+ID-423,veloria-id,Account locked,medium,10 failed attempts in 15 minutes,Wait 30 minutes or reset password,KB-4002,false
+ID-429,veloria-id,Too many MFA attempts,high,Repeated MFA requests; possible compromise if unexpected,Wait 15 minutes; reset password if requests were unexpected,KB-4002,true
+ID-451,veloria-id,Blocked by organization policy,medium,Device or location policy,Contact your admin,KB-4002,false
+VB-E01,velobook14,Battery fault,high,Battery not detected or failing,Power reset; then request repair,KB-3001,true
+VB-E04,velobook14,Memory fault,high,Memory test failed at start-up,Request repair,KB-3001,true
+VB-E07,velobook14,SSD not detected,high,SSD failed or disconnected,Request repair and do not reinstall Windows,KB-3001,true
+VB-E09,velobook14,Fan or thermal fault,high,Fan failed or overheating,Stop using the laptop and request repair,KB-3001,true
