@@ -23,13 +23,15 @@ Veloria sells four products to individuals and business customers:
 | `structured/tickets.jsonl` | JSON Lines | 15 past tickets | Vector search on resolved tickets |
 | `eval/golden_questions.jsonl` | JSON Lines | 16 test questions | Measuring retrieval and answer quality |
 
-## Build the database
+## Load the data
 
 ```bash
-python scripts/build_database.py
+python -m app.ingest
 ```
 
-This creates `data/support.db` (SQLite). It is generated, so it is not committed.
+This rebuilds `data/support.db` (SQLite) and `chroma_db/` (vector store) from these files. Both are generated, so neither is committed.
+
+Articles, the PDF and resolved tickets go into Chroma. Error codes and known issues stay in SQLite for exact lookups. KB-2003 (deprecated) and open tickets are not added to Chroma.
 
 ## Traps built in on purpose
 
