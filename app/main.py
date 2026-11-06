@@ -17,7 +17,8 @@ app = FastAPI(title="Technical Support Assistant", lifespan=lifespan)
 
 @app.get("/health", tags=["Health Check"])
 async def health_check():
-    return {"status": "ok"}
+    return {"status": "ok", "message": "The application is running smoothly.", 
+            "environment": "development"}
 
 
 @app.get("/", tags=["Root"])

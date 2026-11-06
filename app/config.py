@@ -22,5 +22,9 @@ class Settings(BaseSettings):
     chunk_size: int = 800
     chunk_overlap: int = 100
 
+    retrieval_top_k: int = 5  # Chunks returned to the caller.
+    retrieval_candidates: int = 20  # Chunks each search passes to fusion.
+    rrf_k: int = 60  # Standard reciprocal rank fusion constant.
+
 
 settings = Settings()
