@@ -26,5 +26,8 @@ class Settings(BaseSettings):
     retrieval_candidates: int = 20  # Chunks each search passes to fusion.
     rrf_k: int = 60  # Standard reciprocal rank fusion constant.
 
+    structured_search_limit: int = 3  # Error codes and known issues returned.
+    structured_min_matches: int = 2  # Shared words needed to count as a match.
+
 
 settings = Settings()

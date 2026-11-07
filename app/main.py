@@ -1,5 +1,7 @@
+from pathlib import Path
 from fastapi import FastAPI, HTTPException, Request
 from contextlib import asynccontextmanager
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from uvicorn import logging
 
@@ -21,9 +23,12 @@ async def health_check():
             "environment": "development"}
 
 
+FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
+
+
 @app.get("/", tags=["Root"])
 async def root():
-    return {"message": "Welcome to the Technical Support Assistant API!"}
+    return FileResponse(FRONTEND_DIR / "index.html")
 
 @app.post("/ask", tags=["Ask"])
 async def ask_question(question: str):

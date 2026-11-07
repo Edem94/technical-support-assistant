@@ -7,10 +7,18 @@ Rebuild it on its own with `python -m app.database`.
 import csv
 import json
 import re
+from collections import Counter
 from pathlib import Path
 
-from sqlalchemy import Column, ForeignKey, Table, create_engine, event
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
+from sqlalchemy import Column, ForeignKey, Table, create_engine, event, text
+from sqlalchemy.orm import (
+    DeclarativeBase,
+    Mapped,
+    Session,
+    mapped_column,
+    relationship,
+    sessionmaker,
+)
 
 from app.config import settings
 
@@ -74,6 +82,8 @@ class ErrorCode(Base):
     kb_id: Mapped[str | None] = mapped_column(ForeignKey("kb_articles.kb_id"))
     escalate: Mapped[bool]
 
+    product: Mapped[Product] = relationship()
+
 
 class KnownIssue(Base):
     __tablename__ = "known_issues"
@@ -87,6 +97,8 @@ class KnownIssue(Base):
     workaround: Mapped[str | None]
     kb_id: Mapped[str | None] = mapped_column(ForeignKey("kb_articles.kb_id"))
     reported_on: Mapped[str | None]
+
+    product: Mapped[Product] = relationship()
 
 
 class Ticket(Base):
@@ -164,6 +176,47 @@ def build_database() -> None:
         session.add_all(error_codes)
         session.add_all(KnownIssue(**row) for row in read_csv("known_issues.csv"))
         session.add_all(read_tickets(articles))
+
+    build_search_index()
+
+
+def build_search_index() -> None:
+    """Index error codes and known issues for plain-language search (SQLite FTS5).
+
+    The porter tokenizer reduces words to their stem, so "dropping" matches "drops".
+    """
+    statements = [
+        "DROP TABLE IF EXISTS structured_search",
+        """CREATE VIRTUAL TABLE structured_search
+           USING fts5(record_id UNINDEXED, content, tokenize='porter')""",
+        """INSERT INTO structured_search
+           SELECT code, title || ' ' || COALESCE(cause, '') FROM error_codes""",
+        "INSERT INTO structured_search SELECT issue_id, title FROM known_issues",
+    ]
+    with engine.begin() as connection:
+        for statement in statements:
+            connection.execute(text(statement))
+
+
+def get_structured_record(session: Session, record_id: str) -> ErrorCode | KnownIssue | None:
+    return session.get(ErrorCode, record_id) or session.get(KnownIssue, record_id)
+
+
+def search_structured_records(session: Session, terms: list[str]) -> list[ErrorCode | KnownIssue]:
+    """Return the records sharing the most terms, ignoring those below the minimum."""
+    matches = Counter()
+    for term in set(terms):
+        record_ids = session.scalars(
+            text("SELECT record_id FROM structured_search WHERE content MATCH :term"),
+            {"term": f'"{term}"'},  # Quoted, so FTS5 reads it as text, not as a query operator.
+        )
+        matches.update(record_ids)
+
+    return [
+        get_structured_record(session, record_id)
+        for record_id, count in matches.most_common(settings.structured_search_limit)
+        if count >= settings.structured_min_matches
+    ]
 
 
 if __name__ == "__main__":
