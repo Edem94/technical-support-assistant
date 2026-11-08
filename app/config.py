@@ -11,6 +11,9 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=BASE_DIR / ".env", extra="ignore")
 
     anthropic_api_key: str = ""
+    llm_model: str = "claude-haiku-5-5"  # Fast and inexpensive.
+    llm_effort: str = "medium"  # low, medium, high, xhigh or max. Higher costs more.
+    llm_max_tokens: int = 16000
 
     data_dir: Path = BASE_DIR / "data"
     database_url: str = f"sqlite:///{(BASE_DIR / 'data' / 'support.db').as_posix()}"

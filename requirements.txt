@@ -8,11 +8,12 @@ pydantic-settings==2.16.2
 python-dotenv==1.2.4
 sqlalchemy==2.1.8
 
+# Claude
+anthropic==2.4.0
+
 # RAG
 chromadb==1.5.9
-langchain==1.4.8
 langchain-core==1.7.4
-langchain-anthropic==1.7.9
 langchain-chroma==1.1.0
 langchain-huggingface==1.2.3
 langchain-text-splitters==1.1.3
