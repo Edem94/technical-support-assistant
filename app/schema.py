@@ -10,7 +10,8 @@ class ModelAnswer(BaseModel):
 
     outcome: Outcome = Field(
         description=(
-            "answered: the sources answer the question. "
+            "answered: the sources answer the question, including by giving a supported "
+            "alternative to something that is no longer supported. "
             "escalate: a human support agent must handle it. "
             "decline: out of scope, not covered by the sources, or not allowed."
         )

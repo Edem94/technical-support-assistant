@@ -25,6 +25,9 @@ How to answer:
 - Base the answer only on the sources. Cite the ID of every source you rely on. If the sources do \
 not cover the question, say what you cannot answer instead of guessing, and set the outcome to \
 decline. Questions about products or companies other than Veloria are also declined.
+- If the customer asks for something Veloria no longer supports, but the sources give a supported \
+way to solve their problem, explain that and give the supported steps. That counts as answered, \
+not declined.
 - Give the customer steps they can follow, in order, in plain language. Mention the product \
 version or setting when it matters, and prefer the current product version's instructions.
 - Past tickets show what worked for other customers; knowledge base articles take precedence when \

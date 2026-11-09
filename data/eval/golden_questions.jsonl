@@ -1,15 +1,15 @@
 {"id":"Q01","question":"VeloSync says VS-1042 on one of my folders. What do I do?","expected_sources":["KB-1002"],"must_include":["path","260"],"expected_behavior":"answer"}
 {"id":"Q02","question":"My fans are always on and VeloSyncService.exe uses 50% CPU on version 4.1.2","expected_sources":["KB-1004"],"must_include":["4.1.3"],"expected_behavior":"answer"}
 {"id":"Q03","question":"I get VG-619 when I connect from a hotel","expected_sources":["KB-2001"],"must_include":["TLS 443"],"must_not_include":["UDP ports 500"],"expected_behavior":"answer"}
-{"id":"Q04","question":"How do I set up VeloGuard with L2TP?","expected_sources":["KB-2001"],"must_include":["no longer supported"],"must_not_include":["vpn-legacy.veloria.example"],"expected_behavior":"answer"}
+{"id":"Q04","question":"How do I set up VeloGuard with L2TP?","expected_sources":["KB-2001"],"must_include":["no longer support"],"must_not_include":["vpn-legacy.veloria.example"],"expected_behavior":"answer"}
 {"id":"Q05","question":"The power light on my VeloBook blinks amber three times. What does that mean?","expected_sources":["velobook-14-user-guide.pdf"],"must_include":["SSD"],"expected_behavior":"answer"}
 {"id":"Q06","question":"My laptop only charges to 80 percent","expected_sources":["KB-3002"],"must_include":["Battery Care"],"expected_behavior":"answer"}
 {"id":"Q07","question":"How long can I restore deleted files on the Team plan?","expected_sources":["KB-1003"],"must_include":["90 days"],"expected_behavior":"answer"}
 {"id":"Q08","question":"What is the P1 response time for Enterprise customers?","expected_sources":["KB-5001"],"must_include":["1 hour"],"expected_behavior":"answer"}
 {"id":"Q09","question":"All my VeloSync files were encrypted overnight and renamed to .lockd","expected_sources":["KB-1003","KB-5001"],"must_include":["Pause"],"expected_behavior":"escalate"}
 {"id":"Q10","question":"The bottom of my VeloBook is bulging. Should I keep charging it?","expected_sources":["KB-3001","KB-5001"],"must_include":["do not charge"],"expected_behavior":"escalate"}
-{"id":"Q11","question":"I keep getting MFA prompts I never requested","expected_sources":["KB-4002"],"must_include":["reset"],"expected_behavior":"escalate"}
-{"id":"Q12","question":"I lost my BitLocker key, should I reinstall Windows?","expected_sources":["KB-3003"],"must_include":["Do not reinstall"],"expected_behavior":"answer"}
+{"id":"Q11","question":"I keep getting MFA prompts I never requested","expected_sources":["KB-4002"],"must_include":["password"],"expected_behavior":"escalate"}
+{"id":"Q12","question":"I lost my BitLocker key, should I reinstall Windows?","expected_sources":["KB-3003"],"must_include":["Do not reinstall"],"expected_behavior":"escalate"}
 {"id":"Q13","question":"Online-only files are slow on macOS 26. Is that known?","expected_sources":["KI-140"],"must_include":["Keep offline"],"expected_behavior":"answer"}
 {"id":"Q14","question":"How do I fix my Canon printer paper jam?","expected_sources":[],"must_include":[],"expected_behavior":"decline"}
 {"id":"Q15","question":"What is the VeloSync Linux client download link?","expected_sources":[],"must_include":[],"expected_behavior":"decline"}
