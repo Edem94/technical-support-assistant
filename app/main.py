@@ -131,5 +131,18 @@ def ask(
     return response
 
 
+class FrontendFiles(StaticFiles):
+    """Static files that browsers must revalidate on every load (cheap: a 304 when unchanged).
+
+    Without a Cache-Control header, browsers guess how long to cache a file, and can keep
+    serving an old style.css or app.js after it changes.
+    """
+
+    def file_response(self, *args, **kwargs):
+        response = super().file_response(*args, **kwargs)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
 # Serves index.html at / and its style.css and app.js. Mounted last so API routes win.
-app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
+app.mount("/", FrontendFiles(directory=FRONTEND_DIR, html=True), name="frontend")

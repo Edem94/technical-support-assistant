@@ -94,3 +94,13 @@ def test_frontend_is_served(client):
     response = client.get("/")
     assert response.status_code == 200
     assert "<html" in response.text
+
+
+@pytest.mark.parametrize(("path", "content_type"), [("/", "text/html"), ("/style.css", "text/css"),
+                                                     ("/app.js", "javascript")])
+def test_frontend_files_are_revalidated(client, path, content_type):
+    # Without this header a browser can keep using a stale (once empty) style.css or app.js.
+    response = client.get(path)
+    assert response.status_code == 200
+    assert content_type in response.headers["content-type"]
+    assert response.headers["cache-control"] == "no-cache"
