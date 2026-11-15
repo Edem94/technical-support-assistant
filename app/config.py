@@ -32,5 +32,8 @@ class Settings(BaseSettings):
     structured_search_limit: int = 3  # Error codes and known issues returned.
     structured_min_matches: int = 2  # Shared words needed to count as a match.
 
+    # API
+    max_question_length: int = 2000  # Characters; longer questions are rejected with 422.
+
 
 settings = Settings()

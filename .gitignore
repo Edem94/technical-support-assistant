@@ -8,3 +8,4 @@ __pycache__/
 data/*.db
 chroma_db/
 **/traces/
+tests/test_question_answer.txt
