@@ -1,0 +1,171 @@
+# CI/CD for the Veloria support assistant.
+#
+#   Pull request  -> test, then build the Docker image (not pushed)
+#   Push to main  -> test, build and push the image to Artifact Registry, deploy to Cloud Run
+#
+# One-time Google Cloud setup (see the commands in docs/deploy.md), then set these
+# repository variables under Settings > Secrets and variables > Actions > Variables:
+#
+#   GCP_PROJECT_ID                  my-project-id
+#   GCP_REGION                      europe-west1
+#   GAR_REPOSITORY                  support-assistant        (Artifact Registry Docker repo)
+#   CLOUD_RUN_SERVICE               veloria-support-assistant
+#   GCP_WORKLOAD_IDENTITY_PROVIDER  projects/123/locations/global/workloadIdentityPools/github/providers/github
+#   GCP_DEPLOY_SERVICE_ACCOUNT      github-deployer@my-project-id.iam.gserviceaccount.com
+#   CLOUD_RUN_RUNTIME_SERVICE_ACCOUNT  support-assistant-run@my-project-id.iam.gserviceaccount.com
+#   CLOUD_RUN_PUBLIC                true to allow unauthenticated access (anyone can spend API credits)
+#
+# No keys are stored in GitHub: the workflow signs in to Google Cloud with Workload Identity
+# Federation, and Cloud Run reads ANTHROPIC_API_KEY from Secret Manager (secret: anthropic-api-key).
+
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  PYTHON_VERSION: "3.13"
+  TORCH_VERSION: "2.15.0"
+  IMAGE: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.GAR_REPOSITORY }}/${{ vars.CLOUD_RUN_SERVICE }}
+
+jobs:
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install dependencies
+        run: |
+          # CPU-only PyTorch, as in the Dockerfile: the default wheel bundles CUDA.
+          pip install "torch==${TORCH_VERSION}" --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements-dev.txt
+
+      # The tests fake every Claude call and build the SQLite database themselves,
+      # so no API key and no embedding model download are needed.
+      - name: Run tests
+        run: python -m pytest -q
+
+  docker:
+    name: Build image
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write # Workload Identity Federation
+    outputs:
+      image: ${{ steps.ref.outputs.image }}
+    env:
+      PUSH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Pull requests get a local tag, so they build even before the Google Cloud variables exist.
+      - id: ref
+        run: |
+          if [ "$PUSH" = "true" ]; then
+            echo "image=${IMAGE}:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+            echo "latest=${IMAGE}:latest" >> "$GITHUB_OUTPUT"
+          else
+            echo "image=veloria-support-assistant:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Authenticate to Google Cloud
+        if: env.PUSH == 'true'
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+      - name: Log in to Artifact Registry
+        if: env.PUSH == 'true'
+        run: gcloud auth configure-docker "${{ vars.GCP_REGION }}-docker.pkg.dev" --quiet
+
+      # On pull requests this only checks that the image builds (including the search index).
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: ${{ env.PUSH == 'true' }}
+          tags: |
+            ${{ steps.ref.outputs.image }}
+            ${{ steps.ref.outputs.latest }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy to Cloud Run
+    needs: docker
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: production
+      url: ${{ steps.deploy.outputs.url }}
+    permissions:
+      contents: read
+      id-token: write
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy
+        id: deploy
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: ${{ vars.CLOUD_RUN_SERVICE }}
+          region: ${{ vars.GCP_REGION }}
+          image: ${{ needs.docker.outputs.image }}
+          secrets: |
+            ANTHROPIC_API_KEY=anthropic-api-key:latest
+          env_vars: |
+            LLM_MODEL=claude-haiku-5-5
+            LLM_EFFORT=low
+          # The model and search index load at startup (~10 s), so give it 2 GiB and a CPU boost.
+          # max-instances caps how much traffic, and API spend, the service can take.
+          flags: >-
+            --port=8000
+            --memory=2Gi
+            --cpu=1
+            --cpu-boost
+            --min-instances=0
+            --max-instances=3
+            --concurrency=20
+            --timeout=120
+            --service-account=${{ vars.CLOUD_RUN_RUNTIME_SERVICE_ACCOUNT }}
+            ${{ vars.CLOUD_RUN_PUBLIC == 'true' && '--allow-unauthenticated' || '--no-allow-unauthenticated' }}
+
+      - name: Smoke test
+        if: vars.CLOUD_RUN_PUBLIC == 'true'
+        run: |
+          curl --fail --silent --show-error --retry 5 --retry-delay 5 --retry-all-errors \
+            "${{ steps.deploy.outputs.url }}/health"
