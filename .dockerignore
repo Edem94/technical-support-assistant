@@ -1,0 +1,23 @@
+# Keep the build context small and secrets out of the image.
+.env
+.env.*
+.git
+.github
+.vscode
+.claude
+.pytest_cache
+**/__pycache__
+*.pyc
+venv/
+
+# Built inside the image from data/
+chroma_db/
+data/*.db
+
+# Not needed at runtime
+tests/
+evals/
+data/eval/
+README.md
+Dockerfile
+docker-compose.yml

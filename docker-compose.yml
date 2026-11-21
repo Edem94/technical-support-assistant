@@ -1,0 +1,28 @@
+# Run the support assistant in Docker:
+#
+#   docker compose up --build -d     then open http://localhost:8000
+#   docker compose logs -f app
+#   docker compose down
+#
+# The Anthropic API key comes from .env (ANTHROPIC_API_KEY=...). It is passed in at run time
+# and never baked into the image.
+
+services:
+  app:
+    build: .
+    image: veloria-support-assistant:latest
+    container_name: veloria-support-assistant
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # Optional overrides; the defaults live in app/config.py.
+      LLM_MODEL: ${LLM_MODEL:-claude-haiku-5-5}
+      LLM_EFFORT: ${LLM_EFFORT:-low}
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2g

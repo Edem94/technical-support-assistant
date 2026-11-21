@@ -1,0 +1,61 @@
+{
+  "flow": "heldout",
+  "description": "Veloria support assistant (app/rag_chain.answer_question) on 37 held-out questions",
+  "harness_paths": [
+    "evals/report.py"
+  ],
+  "metrics": [
+    {
+      "id": "pass",
+      "kind": "binary",
+      "label": "Pass"
+    },
+    {
+      "id": "outcome_ok",
+      "kind": "binary",
+      "label": "Right outcome"
+    },
+    {
+      "id": "source_ok",
+      "kind": "binary",
+      "label": "Right source"
+    },
+    {
+      "id": "grounded",
+      "kind": "judge",
+      "label": "Grounded"
+    },
+    {
+      "id": "key_points",
+      "kind": "judge",
+      "label": "Key points"
+    }
+  ],
+  "perf_fields": [
+    {
+      "id": "cost_usd",
+      "label": "Cost",
+      "unit": "$"
+    },
+    {
+      "id": "latency_s",
+      "label": "Latency",
+      "unit": "s"
+    },
+    {
+      "id": "out_tokens",
+      "label": "Out tokens"
+    }
+  ],
+  "prices": {
+    "claude-haiku-5-5": {
+      "in": 0.1,
+      "out": 0.5
+    },
+    "claude-sonnet-5-5": {
+      "in": 2.0,
+      "out": 10.0
+    }
+  },
+  "harness_sha": "5ccfa9541dedcab3025672c3cbf92bd04321644fb4008d759f8b4c50827d4388"
+}

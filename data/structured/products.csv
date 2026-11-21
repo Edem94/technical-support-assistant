@@ -1,0 +1,5 @@
+product_id,name,type,current_version,supported_platforms,description
+velosync,VeloSync,software,4.1.3,Windows;macOS,File sync and backup client
+veloguard,VeloGuard VPN,software,6.2.1,Windows;macOS;iOS;Android,Secure remote access VPN client
+velobook14,VeloBook 14,hardware,BIOS 1.18,Windows 11,14-inch business laptop in standard and Pro models
+veloria-id,Veloria ID,service,n/a,Web,Single sign-on and multi-factor authentication

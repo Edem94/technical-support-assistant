@@ -1,3 +1,11 @@
 .env
 
 .vscode/
+venv/
+.env
+__pycache__/
+.pytest_cache/
+data/*.db
+chroma_db/
+**/traces/
+tests/test_question_answer.txt
