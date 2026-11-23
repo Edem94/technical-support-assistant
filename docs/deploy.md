@@ -14,13 +14,13 @@ Run these in a shell with the [gcloud CLI](https://cloud.google.com/sdk/docs/ins
 ```bash
 PROJECT_ID=my-project-id
 REGION=europe-west1
-REPO=support-assistant
+REPO=vsa
 SERVICE=veloria-support-assistant
 GITHUB_REPO=your-github-user/technical-support-assistant
 
 PROJECT_NUMBER=$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')
 DEPLOYER=github-deployer@$PROJECT_ID.iam.gserviceaccount.com
-RUNTIME=support-assistant-run@$PROJECT_ID.iam.gserviceaccount.com
+RUNTIME=vsa-runtime@$PROJECT_ID.iam.gserviceaccount.com
 gcloud config set project "$PROJECT_ID"
 ```
 
@@ -41,11 +41,11 @@ printf '%s' "PASTE-YOUR-KEY" | gcloud secrets create anthropic-api-key --data-fi
 
 ## 4. Create the service accounts
 
-`support-assistant-run` is what the app runs as; it can only read the API key.
+`vsa-runtime` is what the app runs as; it can only read the API key.
 `github-deployer` is what GitHub Actions uses; it can push images and deploy.
 
 ```bash
-gcloud iam service-accounts create support-assistant-run
+gcloud iam service-accounts create vsa-runtime
 gcloud iam service-accounts create github-deployer
 
 gcloud secrets add-iam-policy-binding anthropic-api-key \
@@ -66,7 +66,7 @@ Only workflows from your repository can use the deployer account.
 ```bash
 gcloud iam workload-identity-pools create github --location=global
 
-gcloud iam workload-identity-pools providers create-oidc github \
+gcloud iam workload-identity-pools providers create-oidc github-provider \
   --location=global --workload-identity-pool=github \
   --issuer-uri=https://token.actions.githubusercontent.com \
   --attribute-mapping=google.subject=assertion.sub,attribute.repository=assertion.repository \
@@ -76,7 +76,7 @@ gcloud iam service-accounts add-iam-policy-binding "$DEPLOYER" \
   --role=roles/iam.workloadIdentityUser \
   --member="principalSet://iam.googleapis.com/projects/$PROJECT_NUMBER/locations/global/workloadIdentityPools/github/attribute.repository/$GITHUB_REPO"
 
-echo "GCP_WORKLOAD_IDENTITY_PROVIDER=projects/$PROJECT_NUMBER/locations/global/workloadIdentityPools/github/providers/github"
+echo "GCP_WIF_PROVIDER=projects/$PROJECT_NUMBER/locations/global/workloadIdentityPools/github/providers/github-provider"
 ```
 
 ## 6. Add the GitHub repository variables
@@ -87,11 +87,10 @@ In GitHub: Settings > Secrets and variables > Actions > Variables > New reposito
 |---|---|
 | `GCP_PROJECT_ID` | your project ID |
 | `GCP_REGION` | e.g. `europe-west1` |
-| `GAR_REPOSITORY` | `support-assistant` |
-| `CLOUD_RUN_SERVICE` | `veloria-support-assistant` |
-| `GCP_WORKLOAD_IDENTITY_PROVIDER` | printed by the last command above |
-| `GCP_DEPLOY_SERVICE_ACCOUNT` | `github-deployer@PROJECT_ID.iam.gserviceaccount.com` |
-| `CLOUD_RUN_RUNTIME_SERVICE_ACCOUNT` | `support-assistant-run@PROJECT_ID.iam.gserviceaccount.com` |
+| `AR_REPOSITORY` | `vsa` |
+| `GCP_WIF_PROVIDER` | printed by the last command above |
+| `GCP_DEPLOY_SA` | `github-deployer@PROJECT_ID.iam.gserviceaccount.com` |
+| `GCP_RUNTIME_SA` | `vsa-runtime@PROJECT_ID.iam.gserviceaccount.com` |
 | `CLOUD_RUN_PUBLIC` | `true` for a public demo, otherwise leave unset |
 
 With `CLOUD_RUN_PUBLIC=true` anyone with the URL can ask questions, and every question costs
@@ -103,7 +102,8 @@ run; add required reviewers to it (Settings > Environments) if you want to appro
 
 ## 7. Deploy
 
-Push to `main` (or run the workflow by hand from the Actions tab). The deploy job prints the
+Push to `main`, or run the workflow by hand from the Actions tab with the `main` branch selected
+(on any other branch the deploy job is skipped). The deploy job prints the
 service URL. If the service is private, open it through an authenticated proxy:
 
 ```bash

@@ -1,19 +1,19 @@
 # CI/CD for the Veloria support assistant.
 #
-#   Pull request  -> test, then build the Docker image (not pushed)
-#   Push to main  -> test, build and push the image to Artifact Registry, deploy to Cloud Run
+#   Pull request, or run by hand on another branch -> test, build the Docker image (not pushed)
+#   Push to main, or run by hand on main           -> test, push the image to Artifact Registry,
+#                                                     deploy to Cloud Run
 #
 # One-time Google Cloud setup (see the commands in docs/deploy.md), then set these
 # repository variables under Settings > Secrets and variables > Actions > Variables:
 #
-#   GCP_PROJECT_ID                  my-project-id
-#   GCP_REGION                      europe-west1
-#   GAR_REPOSITORY                  support-assistant        (Artifact Registry Docker repo)
-#   CLOUD_RUN_SERVICE               veloria-support-assistant
-#   GCP_WORKLOAD_IDENTITY_PROVIDER  projects/123/locations/global/workloadIdentityPools/github/providers/github
-#   GCP_DEPLOY_SERVICE_ACCOUNT      github-deployer@my-project-id.iam.gserviceaccount.com
-#   CLOUD_RUN_RUNTIME_SERVICE_ACCOUNT  support-assistant-run@my-project-id.iam.gserviceaccount.com
-#   CLOUD_RUN_PUBLIC                true to allow unauthenticated access (anyone can spend API credits)
+#   GCP_PROJECT_ID    my-project-id
+#   GCP_REGION        europe-west1
+#   AR_REPOSITORY     vsa  (Artifact Registry Docker repository)
+#   GCP_WIF_PROVIDER  projects/123/locations/global/workloadIdentityPools/github/providers/github-provider
+#   GCP_DEPLOY_SA     github-deployer@my-project-id.iam.gserviceaccount.com
+#   GCP_RUNTIME_SA    vsa-runtime@my-project-id.iam.gserviceaccount.com
+#   CLOUD_RUN_PUBLIC  optional: true lets anyone use the app (and spend API credits)
 #
 # No keys are stored in GitHub: the workflow signs in to Google Cloud with Workload Identity
 # Federation, and Cloud Run reads ANTHROPIC_API_KEY from Secret Manager (secret: anthropic-api-key).
@@ -36,7 +36,7 @@ concurrency:
 env:
   PYTHON_VERSION: "3.13"
   TORCH_VERSION: "2.15.0"
-  IMAGE: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.GAR_REPOSITORY }}/${{ vars.CLOUD_RUN_SERVICE }}
+  SERVICE: veloria-support-assistant
 
 jobs:
   test:
@@ -76,18 +76,42 @@ jobs:
     outputs:
       image: ${{ steps.ref.outputs.image }}
     env:
-      PUSH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+      # On a pull request the ref is refs/pull/<n>/merge, so this is true only for pushes to
+      # main and manual runs on main. The deploy job uses the same condition.
+      PUSH: ${{ github.ref == 'refs/heads/main' }}
     steps:
       - uses: actions/checkout@v4
 
-      # Pull requests get a local tag, so they build even before the Google Cloud variables exist.
+      # Fail with a clear message instead of an obscure sign-in error or a silently skipped deploy.
+      - name: Check repository variables
+        if: env.PUSH == 'true'
+        env:
+          GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+          GCP_REGION: ${{ vars.GCP_REGION }}
+          AR_REPOSITORY: ${{ vars.AR_REPOSITORY }}
+          GCP_WIF_PROVIDER: ${{ vars.GCP_WIF_PROVIDER }}
+          GCP_DEPLOY_SA: ${{ vars.GCP_DEPLOY_SA }}
+          GCP_RUNTIME_SA: ${{ vars.GCP_RUNTIME_SA }}
+        run: |
+          missing=""
+          for name in GCP_PROJECT_ID GCP_REGION AR_REPOSITORY GCP_WIF_PROVIDER GCP_DEPLOY_SA GCP_RUNTIME_SA; do
+            if [ -z "${!name}" ]; then missing="$missing $name"; fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository variables:$missing (see docs/deploy.md)"
+            exit 1
+          fi
+
+      # Builds that are not pushed get a local tag, so they need no Google Cloud variables.
       - id: ref
+        env:
+          REGISTRY: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.AR_REPOSITORY }}
         run: |
           if [ "$PUSH" = "true" ]; then
-            echo "image=${IMAGE}:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
-            echo "latest=${IMAGE}:latest" >> "$GITHUB_OUTPUT"
+            echo "image=${REGISTRY}/${SERVICE}:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+            echo "latest=${REGISTRY}/${SERVICE}:latest" >> "$GITHUB_OUTPUT"
           else
-            echo "image=veloria-support-assistant:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+            echo "image=${SERVICE}:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
           fi
 
       - uses: docker/setup-buildx-action@v3
@@ -96,14 +120,17 @@ jobs:
         if: env.PUSH == 'true'
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SA }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+        if: env.PUSH == 'true'
 
       - name: Log in to Artifact Registry
         if: env.PUSH == 'true'
         run: gcloud auth configure-docker "${{ vars.GCP_REGION }}-docker.pkg.dev" --quiet
 
-      # On pull requests this only checks that the image builds (including the search index).
+      # When not pushing, this only checks that the image builds (including the search index).
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
@@ -114,13 +141,15 @@ jobs:
             ${{ steps.ref.outputs.latest }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          provenance: false # a plain single-platform image, no attestation index
 
   deploy:
     name: Deploy to Cloud Run
     needs: docker
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Pushes to main and manual runs on main; never pull requests or other branches.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     environment:
       name: production
       url: ${{ steps.deploy.outputs.url }}
@@ -131,10 +160,13 @@ jobs:
       group: deploy-production
       cancel-in-progress: false
     steps:
-      - uses: google-github-actions/auth@v2
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SA }}
 
       - uses: google-github-actions/setup-gcloud@v2
 
@@ -142,7 +174,8 @@ jobs:
         id: deploy
         uses: google-github-actions/deploy-cloudrun@v2
         with:
-          service: ${{ vars.CLOUD_RUN_SERVICE }}
+          service: ${{ env.SERVICE }}
+          project_id: ${{ vars.GCP_PROJECT_ID }}
           region: ${{ vars.GCP_REGION }}
           image: ${{ needs.docker.outputs.image }}
           secrets: |
@@ -150,8 +183,10 @@ jobs:
           env_vars: |
             LLM_MODEL=claude-haiku-5-5
             LLM_EFFORT=low
-          # The model and search index load at startup (~10 s), so give it 2 GiB and a CPU boost.
-          # max-instances caps how much traffic, and API spend, the service can take.
+          # --memory, --cpu-boost: PyTorch, the model and the search index load at startup.
+          # --startup-probe: poll /health for up to 10 minutes; a revision whose index fails to
+          #   load never becomes ready, so the deploy fails and the old revision keeps serving.
+          # --max-instances: caps how much traffic, and API spend, the service can take.
           flags: >-
             --port=8000
             --memory=2Gi
@@ -161,9 +196,11 @@ jobs:
             --max-instances=3
             --concurrency=20
             --timeout=120
-            --service-account=${{ vars.CLOUD_RUN_RUNTIME_SERVICE_ACCOUNT }}
+            --startup-probe=httpGet.path=/health,httpGet.port=8000,periodSeconds=10,timeoutSeconds=5,failureThreshold=60
+            --service-account=${{ vars.GCP_RUNTIME_SA }}
             ${{ vars.CLOUD_RUN_PUBLIC == 'true' && '--allow-unauthenticated' || '--no-allow-unauthenticated' }}
 
+      # A private service rejects anonymous requests, so only a public one can be checked this way.
       - name: Smoke test
         if: vars.CLOUD_RUN_PUBLIC == 'true'
         run: |
