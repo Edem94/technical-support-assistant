@@ -21,3 +21,6 @@ data/eval/
 README.md
 Dockerfile
 docker-compose.yml
+
+# Credentials file google-github-actions/auth writes into the workspace in CI
+gha-creds-*.json
