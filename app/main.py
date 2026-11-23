@@ -19,12 +19,20 @@ from pydantic import BaseModel, Field, field_validator
 
 from app.config import settings
 from app.rag_chain import answer_question
+from app.rate_limit import RateLimiter, visitor_id
 from app.retrieval import get_retriever
 from app.schema import SupportResponse
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("support_assistant")
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
+
+
+# Counted per server process: with several Cloud Run instances a visitor can get a few times more.
+limiter = RateLimiter([
+    (settings.rate_limit_per_minute, 60),
+    (settings.rate_limit_per_day, 24 * 60 * 60),
+])
 
 
 def warm_up() -> None:
@@ -75,6 +83,14 @@ class ErrorResponse(BaseModel):
     detail: str
 
 
+def describe_wait(seconds: int) -> str:
+    for size, unit in ((3600, "hour"), (60, "minute"), (1, "second")):
+        if seconds >= size:
+            count = -(-seconds // size)  # round up
+            return f"{count} {unit}{'' if count == 1 else 's'}"
+    return "a moment"
+
+
 def get_answerer() -> Callable[[str], SupportResponse]:
     """The function that answers a question. Tests replace it with a fake."""
     return answer_question
@@ -98,7 +114,7 @@ async def health(request: Request):
     "/ask",
     tags=["Ask"],
     response_model=SupportResponse,
-    responses={502: {"model": ErrorResponse}, 503: {"model": ErrorResponse}},
+    responses={code: {"model": ErrorResponse} for code in (429, 502, 503)},
 )
 def ask(
     body: AskRequest,
@@ -108,6 +124,16 @@ def ask(
     # A plain def: answering blocks on retrieval and the Claude call, so FastAPI runs it in a thread.
     if request.app.state.startup_error:
         raise HTTPException(503, "The assistant is not ready: the search index failed to load.")
+
+    # Checked here, after validation, so a rejected question does not use up the visitor's limit.
+    wait = limiter.check(visitor_id(request, settings.trusted_proxy_hops))
+    if wait:
+        logger.info("ask refused: rate limit, retry in %ds", wait)
+        raise HTTPException(
+            429,
+            f"You have reached the question limit. Please try again in {describe_wait(wait)}.",
+            headers={"Retry-After": str(wait)},
+        )
 
     started = time.perf_counter()
     try:

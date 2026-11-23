@@ -183,6 +183,7 @@ jobs:
           env_vars: |
             LLM_MODEL=claude-haiku-5-5
             LLM_EFFORT=low
+            TRUSTED_PROXY_HOPS=1
           # --memory, --cpu-boost: PyTorch, the model and the search index load at startup.
           # --startup-probe: poll /health for up to 10 minutes; a revision whose index fails to
           #   load never becomes ready, so the deploy fails and the old revision keeps serving.

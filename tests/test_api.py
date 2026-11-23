@@ -5,6 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app import main
+from app.rate_limit import RateLimiter
 from app.schema import Source, SupportResponse
 
 ANSWER = SupportResponse(
@@ -19,6 +20,7 @@ ANSWER = SupportResponse(
 @pytest.fixture
 def client(monkeypatch):
     monkeypatch.setattr(main, "warm_up", lambda: None)
+    monkeypatch.setattr(main, "limiter", RateLimiter([(1000, 60)]))  # no leftovers between tests
     asked = []
 
     def fake_answer(question):
@@ -70,6 +72,29 @@ def test_ask_maps_upstream_errors(client, error, status):
     response = client.post("/ask", json={"question": "Hello"})
     assert response.status_code == status
     assert "boom" not in response.json()["detail"]  # internal details stay in the log
+
+
+def test_ask_is_rate_limited_per_visitor(client, monkeypatch):
+    monkeypatch.setattr(main, "limiter", RateLimiter([(2, 60)]))
+    monkeypatch.setattr(main.settings, "trusted_proxy_hops", 1)
+
+    def ask(forwarded, question="Hello"):
+        return client.post("/ask", json={"question": question}, headers={"X-Forwarded-For": forwarded})
+
+    assert ask("203.0.113.1", question="  ").status_code == 422  # does not count
+    assert [ask("203.0.113.1").status_code for _ in range(3)] == [200, 200, 429]
+    assert ask("198.51.100.9, 203.0.113.1").status_code == 429  # a made-up first entry does not help
+    assert ask("203.0.113.2").status_code == 200  # another visitor
+    assert len(client.asked) == 3
+
+    refused = ask("203.0.113.1")
+    assert 1 <= int(refused.headers["retry-after"]) <= 60
+    assert "Please try again in" in refused.json()["detail"]
+
+
+def test_health_and_frontend_are_not_rate_limited(client, monkeypatch):
+    monkeypatch.setattr(main, "limiter", RateLimiter([(1, 60)]))
+    assert [client.get(path).status_code for path in ("/health", "/", "/health", "/")] == [200] * 4
 
 
 def test_health_ok(client):

@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -34,6 +35,10 @@ class Settings(BaseSettings):
 
     # API
     max_question_length: int = 2000  # Characters; longer questions are rejected with 422.
+    rate_limit_per_minute: int = Field(default=10, ge=1)  # Questions per visitor, per server process.
+    rate_limit_per_day: int = Field(default=100, ge=1)
+    # Proxies in front of the app that append to X-Forwarded-For: 1 on Cloud Run, 0 when run directly.
+    trusted_proxy_hops: int = Field(default=0, ge=0)
 
 
 settings = Settings()
