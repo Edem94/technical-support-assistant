@@ -18,7 +18,7 @@ data/*.db
 tests/
 evals/
 data/eval/
-README.md
+**/README.md
 Dockerfile
 docker-compose.yml
 
